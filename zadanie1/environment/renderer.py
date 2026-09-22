@@ -2,12 +2,14 @@ import pygame
 from pathlib import Path
 
 class Renderer:
-    def __init__(self, screen, environment, boardSize=800):
+    def __init__(self, screen, environment, boardSize=800, perspective = "white"):
         self.screen = screen
         self.environment = environment
 
         self.boardSize = boardSize
         self.squareSize = boardSize // 8
+
+        self.perspective = perspective
 
         self.lightColor = (240, 217, 181)
         self.darkColor = (181, 136, 99)
@@ -98,13 +100,21 @@ class Renderer:
 
                 image = self.pieceImages[piece]
 
-                x = col * self.squareSize
-                y = row * self.squareSize
+                if self.perspective == "white":
+                    displayRow = row
+                    displayCol = col
+                else:
+                    displayRow = 7 - row
+                    displayCol = 7 - col
 
-                self.screen.blit(
-                    image,
-                    (x, y)
+                rect = image.get_rect()
+                    
+                rect.center = (
+                    displayCol * self.squareSize + self.squareSize //2,
+                    displayRow * self.squareSize + self.squareSize //2
                 )
+
+                self.screen.blit(image, rect)
 
     def drawMoveHistory(self):
         panelX = self.boardSize

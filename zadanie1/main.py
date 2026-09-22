@@ -1,94 +1,163 @@
 import pygame
+import random
 
 from environment.environment import Environment
 from environment.renderer import Renderer
 from environment.move import Move
+from chessbot.agent import RandomAgent
 
-pygame.init()
+class Main:
+    WIDTH = 1100
+    HEIGHT = 800
+    BOARD_SIZE = 800
+    
+    def __init__(self):
+        self.perspective = random.choice(["white", "black"])
 
-WIDTH = 1100
-HEIGHT = 800
+        self.humanColor = "w" if self.perspective == "white" else "b"
+        self.agent1Color = "b" if self.humanColor == "w" else "w"
 
-screen = pygame.display.set_mode((WIDTH, HEIGHT))
+        pygame.init()
 
-pygame.display.set_caption("Chess Bot")
+        self.screen = pygame.display.set_mode((self.WIDTH, self.HEIGHT))
+        pygame.display.set_caption("Chess Bot")
 
-clock = pygame.time.Clock()
+        self.environment = Environment()
+        self.renderer = Renderer(self.screen, self.environment, perspective=self.perspective)
+        self.agent1 = RandomAgent(self.agent1Color)
+        #self.agent2 = MinimaxAgent(self.agentColor)
 
-environment = Environment()
-renderer = Renderer(screen, environment)
+        self.clock = pygame.time.Clock()    
 
-running = True
+        self.running = True
+        self.selectedSquare = None
 
-selectedSquare = None
+    def getCurrentPlayerCode(self):
+        return "w" if self.environment.currentPlayer == "white" else "b"
 
-while running:
+    def eventHandler(self):
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                self.running = False
 
-    for event in pygame.event.get():
+                return
 
-        if event.type == pygame.QUIT:
-            running = False
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if self.environment.isTerminal():
+                    self.restartGame()
+                    continue
 
-        if event.type == pygame.MOUSEWHEEL:
-            mouseX, mouseY = pygame.mouse.get_pos()
+                self.handleClick(event)
 
-            if mouseX >= 800:
-                renderer.scrollMoveHistory(event.y)
+            if event.type == pygame.MOUSEWHEEL:
+                self.handleScroll(event)
 
-        if (event.type == pygame.MOUSEBUTTONDOWN and not environment.isCheckmate()):
-            if event.button == 1:
+    def handleScroll(self, event):
+        mouseX, mouseY = pygame.mouse.get_pos()
+        
+        if mouseX >= 800:
+            self.renderer.scrollMoveHistory(event.y)
 
-                mouseX, mouseY = event.pos
+    def handleClick(self, event):
+        if event.button != 1:
+            return
 
-            if mouseX < 800 and mouseY < 800:
+        if self.environment.isTerminal():
+            return
 
-                col = mouseX // renderer.squareSize
-                row = mouseY // renderer.squareSize
+        if self.getCurrentPlayerCode() != self.humanColor:
+            return
 
-                piece = environment.board.board[row][col]
+        mouseX, mouseY = event.pos
 
-                if selectedSquare is None:
+        if (mouseX >= self.BOARD_SIZE or mouseY >= self.BOARD_SIZE):
+            return
 
-                    if piece is not None:
+        clickedCol = (mouseX // self.renderer.squareSize)
+        clickedRow = (mouseY // self.renderer.squareSize)
 
-                        playerCode = (
-                            "w"
-                            if environment.currentPlayer == "white"
-                            else "b"
-                        )
+        if self.renderer.perspective == "white":
+            row = clickedRow
+            col = clickedCol
 
-                        if piece[0] == playerCode:
-                            selectedSquare = (row, col)
+        else:
+            row = 7 - clickedRow
+            col = 7 - clickedCol
 
-                else:
-                    playerCode = (
-                        "w"
-                        if environment.currentPlayer == "white"
-                        else "b"
-                    )
+        self.handleBoardClick(row, col)
 
-                    if piece is not None and piece[0] == playerCode:
-                        selectedSquare = (row, col)
+    def handleBoardClick(self, row, col):
+        piece = self.environment.board.board[row][col]
+        playerCode = self.getCurrentPlayerCode()
 
-                    else:
-                        startRow, startCol = selectedSquare
+        if self.selectedSquare is None:
 
-                        requestedMove = Move(
-                            startRow, startCol,
-                            row, col
-                        )
+            if (piece is not None and piece[0] == playerCode):
+                self.selectedSquare = (row, col)
+            return
 
-                        legalMoves = environment.getLegalMoves()
+        if (piece is not None and piece[0] == playerCode):
+            self.selectedSquare = (row, col)
 
-                        if requestedMove in legalMoves:
-                            environment.makeMove(requestedMove)
+            return
 
-                        selectedSquare = None
+        startRow, startCol = self.selectedSquare
 
-    renderer.draw()
+        requestedMove = Move(startRow, startCol, row, col)
 
-    pygame.display.flip()
+        self.tryMove(requestedMove)
+        self.selectedSquare = None
 
-    clock.tick(60)
+    def tryMove(self, requestedMove):
+        legalMoves = (
+            self.environment.getLegalMoves()
+        )
 
-pygame.quit()
+        for legalMove in legalMoves:
+            if (legalMove.startRow == requestedMove.startRow
+                and legalMove.startCol== requestedMove.startCol
+                and legalMove.endRow == requestedMove.endRow
+                and legalMove.endCol == requestedMove.endCol):
+
+                self.environment.makeMove(legalMove)
+
+                return True
+
+        return False
+
+    def handleAgentTurn(self):
+        if self.environment.isTerminal():
+            return
+
+        if (self.getCurrentPlayerCode() != self.agent1Color):
+            return
+
+        agentMove = self.agent1.chooseMove(self.environment)
+
+        if agentMove is not None:
+            self.environment.makeMove(agentMove)
+
+    def draw(self):
+        self.renderer.draw()
+        pygame.display.flip()
+
+    def run(self):
+        while self.running:
+            self.eventHandler()
+
+            if not self.running:
+                break
+
+            self.handleAgentTurn()
+            self.draw()
+            self.clock.tick(60)
+
+        pygame.quit()
+
+    def restartGame(self):
+        self.environment.reset()
+        self.selectedSquare = None
+
+if __name__ == "__main__":
+    game = Main()
+    game.run()
